@@ -5,27 +5,32 @@ const loading = document.getElementById("loading");
 form.addEventListener("submit", (e) => {
   e.preventDefault();
 
-  const promptInput = document.getElementById("prompt").value.trim();
-  if (!promptInput) return;
+  const userPrompt = document.getElementById("prompt").value.trim();
+  if (!userPrompt) return;
 
   loading.style.display = "block";
   image.style.display = "none";
 
-  // Fashion-optimized prompt (VERY IMPORTANT)
-  const finalPrompt = `
-  highly detailed fashion photography,
-  ${promptInput},
-  pirate goth renaissance fashion,
-  cinematic lighting,
-  ultra detailed fabric,
-  editorial fashion shoot,
-  dark fantasy aesthetic,
-  4k, sharp focus
-  `;
+  // 🔒 Prompt locking for fashion accuracy
+  const finalPrompt = [
+    userPrompt,
+    "fashion photography",
+    "pirate gothic renaissance outfit",
+    "full body portrait",
+    "high detail fabric texture",
+    "cinematic lighting",
+    "editorial photoshoot",
+    "dark fantasy aesthetic",
+    "sharp focus",
+    "realistic"
+  ].join(", ");
 
   const seed = Math.floor(Math.random() * 100000);
 
-  const imgUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=768&height=1024&seed=${seed}&model=flux`;
+  const imgUrl =
+    "https://image.pollinations.ai/prompt/" +
+    encodeURIComponent(finalPrompt) +
+    `?width=768&height=1024&seed=${seed}&model=flux&nologo=true`;
 
   image.onload = () => {
     loading.style.display = "none";
