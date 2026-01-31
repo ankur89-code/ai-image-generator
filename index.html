@@ -1,13 +1,32 @@
-<form id="form">
-  <input
-    type="text"
-    id="prompt"
-    placeholder="Describe your outfit (e.g. pirate goth dress)"
-    required
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Image Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <form id="form">
+    <input
+      type="text"
+      id="prompt"
+      placeholder="Describe your outfit (e.g. pirate goth dress)"
+      required
+    />
+    <button type="submit">Generate Image</button>
+  </form>
+
+  <p id="loading" style="display:none;">Generating image...</p>
+
+  <img
+    id="output"
+    style="display:none; max-width:100%; margin-top:20px;"
+    alt="AI generated fashion image"
   />
-  <button type="submit">Generate Image</button>
-</form>
 
-<p id="loading" style="display:none;">Generating image...</p>
-
-<img id="output" style="display:none; max-width:100%; margin-top:20px;" />
+  <!-- ✅ THIS WAS MISSING -->
+  <script src="script.js"></script>
+</body>
+</html>
