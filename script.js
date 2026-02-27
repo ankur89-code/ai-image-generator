@@ -45,9 +45,24 @@ function buildImageUrl(finalPrompt, seed, fallback = false) {
 
 function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+
+    function fail(message) {
+      if (settled) return;
+      settled = true;
+      reject(new Error(message));
+    }
+
+    function succeed() {
+      if (settled) return;
+      settled = true;
+      resolve();
+    }
+
     const timeoutId = setTimeout(() => {
       cleanup();
-      reject(new Error("timeout"));
+      imageElement.removeAttribute("src");
+      fail("timeout");
     }, timeoutMs);
 
     function cleanup() {
@@ -58,12 +73,12 @@ function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
 
     imageElement.onload = () => {
       cleanup();
-      resolve();
+      succeed();
     };
 
     imageElement.onerror = () => {
       cleanup();
-      reject(new Error("load_error"));
+      fail("load_error");
     };
 
     imageElement.src = imageUrl;
@@ -105,7 +120,8 @@ form.addEventListener("submit", async (e) => {
     try {
       await loadImageWithTimeout(image, primaryUrl, REQUEST_TIMEOUT_MS);
     } catch (error) {
-      const isRetriable = error.message === "load_error";
+      const isRetriable =
+        error.message === "load_error" || error.message === "timeout";
       if (!isRetriable) {
         throw error;
       }
