@@ -6,7 +6,6 @@ const status = document.getElementById("status");
 const submitButton = form.querySelector('button[type="submit"]');
 
 const REQUEST_TIMEOUT_MS = 45000;
-let activeObjectUrl = null;
 
 function setGeneratingState(isGenerating) {
   loading.style.display = isGenerating ? "block" : "none";
@@ -21,29 +20,31 @@ function setStatus(message, isError = false) {
   status.style.color = isError ? "#ff8a80" : "#9e9e9e";
 }
 
-async function fetchGeneratedImage(imageUrl) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      reject(new Error("timeout"));
+    }, timeoutMs);
 
-  try {
-    const response = await fetch(imageUrl, {
-      signal: controller.signal,
-      cache: "no-store"
-    });
-
-    if (!response.ok) {
-      throw new Error(`Image request failed with status ${response.status}`);
+    function cleanup() {
+      clearTimeout(timeoutId);
+      imageElement.onload = null;
+      imageElement.onerror = null;
     }
 
-    const imageBlob = await response.blob();
-    if (!imageBlob.type.startsWith("image/")) {
-      throw new Error("Image provider returned a non-image response");
-    }
+    imageElement.onload = () => {
+      cleanup();
+      resolve();
+    };
 
-    return URL.createObjectURL(imageBlob);
-  } finally {
-    clearTimeout(timeoutId);
-  }
+    imageElement.onerror = () => {
+      cleanup();
+      reject(new Error("load_error"));
+    };
+
+    imageElement.src = imageUrl;
+  });
 }
 
 form.addEventListener("submit", async (e) => {
@@ -56,7 +57,6 @@ form.addEventListener("submit", async (e) => {
   setStatus("Generating image...");
   image.style.display = "none";
 
-  // Prompt locking for fashion accuracy
   const finalPrompt = [
     userPrompt,
     "fashion photography",
@@ -71,25 +71,17 @@ form.addEventListener("submit", async (e) => {
   ].join(", ");
 
   const seed = Math.floor(Math.random() * 100000);
-
   const imageUrl =
     "https://image.pollinations.ai/prompt/" +
     encodeURIComponent(finalPrompt) +
     `?width=768&height=1024&seed=${seed}&model=flux&nologo=true`;
 
   try {
-    const generatedImageUrl = await fetchGeneratedImage(imageUrl);
-
-    if (activeObjectUrl) {
-      URL.revokeObjectURL(activeObjectUrl);
-    }
-
-    activeObjectUrl = generatedImageUrl;
-    image.src = generatedImageUrl;
+    await loadImageWithTimeout(image, imageUrl, REQUEST_TIMEOUT_MS);
     image.style.display = "block";
     setStatus("");
   } catch (error) {
-    const isTimeoutError = error.name === "AbortError";
+    const isTimeoutError = error.message === "timeout";
     setStatus(
       isTimeoutError
         ? "Image generation timed out. Please try again."
@@ -97,6 +89,7 @@ form.addEventListener("submit", async (e) => {
       true
     );
     image.style.display = "none";
+    image.removeAttribute("src");
   } finally {
     setGeneratingState(false);
   }
