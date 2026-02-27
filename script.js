@@ -1,6 +1,14 @@
 const form = document.getElementById("form");
 const image = document.getElementById("output");
 const loading = document.getElementById("loading");
+const submitButton = form.querySelector('button[type="submit"]');
+
+function setGeneratingState(isGenerating) {
+  loading.style.display = isGenerating ? "block" : "none";
+  if (submitButton) {
+    submitButton.disabled = isGenerating;
+  }
+}
 
 form.addEventListener("submit", (e) => {
   e.preventDefault();
@@ -8,7 +16,7 @@ form.addEventListener("submit", (e) => {
   const userPrompt = document.getElementById("prompt").value.trim();
   if (!userPrompt) return;
 
-  loading.style.display = "block";
+  setGeneratingState(true);
   image.style.display = "none";
 
   // 🔒 Prompt locking for fashion accuracy
@@ -33,8 +41,14 @@ form.addEventListener("submit", (e) => {
     `?width=768&height=1024&seed=${seed}&model=flux&nologo=true`;
 
   image.onload = () => {
-    loading.style.display = "none";
+    setGeneratingState(false);
     image.style.display = "block";
+  };
+
+  image.onerror = () => {
+    setGeneratingState(false);
+    image.style.display = "none";
+    alert("Image generation failed. Please try again.");
   };
 
   image.src = imgUrl;
