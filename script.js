@@ -6,18 +6,41 @@ const status = document.getElementById("status");
 const submitButton = form.querySelector('button[type="submit"]');
 
 const REQUEST_TIMEOUT_MS = 45000;
+let isGenerating = false;
 
-function setGeneratingState(isGenerating) {
-  loading.style.display = isGenerating ? "block" : "none";
+function setGeneratingState(generating) {
+  isGenerating = generating;
+  loading.style.display = generating ? "block" : "none";
+
   if (submitButton) {
-    submitButton.disabled = isGenerating;
+    submitButton.disabled = generating;
   }
+
+  promptInput.disabled = generating;
 }
 
 function setStatus(message, isError = false) {
   status.textContent = message;
   status.style.display = message ? "block" : "none";
   status.style.color = isError ? "#ff8a80" : "#9e9e9e";
+}
+
+function buildImageUrl(finalPrompt, seed, fallback = false) {
+  const baseUrl =
+    "https://image.pollinations.ai/prompt/" + encodeURIComponent(finalPrompt);
+
+  const params = new URLSearchParams({
+    width: "768",
+    height: "1024",
+    seed: String(seed),
+    nologo: "true"
+  });
+
+  if (!fallback) {
+    params.set("model", "flux");
+  }
+
+  return `${baseUrl}?${params.toString()}`;
 }
 
 function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
@@ -50,6 +73,10 @@ function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  if (isGenerating) {
+    return;
+  }
+
   const userPrompt = promptInput.value.trim();
   if (!userPrompt) return;
 
@@ -71,13 +98,22 @@ form.addEventListener("submit", async (e) => {
   ].join(", ");
 
   const seed = Math.floor(Math.random() * 100000);
-  const imageUrl =
-    "https://image.pollinations.ai/prompt/" +
-    encodeURIComponent(finalPrompt) +
-    `?width=768&height=1024&seed=${seed}&model=flux&nologo=true`;
+  const primaryUrl = buildImageUrl(finalPrompt, seed, false);
+  const fallbackUrl = buildImageUrl(finalPrompt, seed, true);
 
   try {
-    await loadImageWithTimeout(image, imageUrl, REQUEST_TIMEOUT_MS);
+    try {
+      await loadImageWithTimeout(image, primaryUrl, REQUEST_TIMEOUT_MS);
+    } catch (error) {
+      const isRetriable = error.message === "load_error";
+      if (!isRetriable) {
+        throw error;
+      }
+
+      setStatus("Primary model failed, retrying...");
+      await loadImageWithTimeout(image, fallbackUrl, REQUEST_TIMEOUT_MS);
+    }
+
     image.style.display = "block";
     setStatus("");
   } catch (error) {
