@@ -1,17 +1,104 @@
 const form = document.getElementById("form");
+const promptInput = document.getElementById("prompt");
 const image = document.getElementById("output");
 const loading = document.getElementById("loading");
+const status = document.getElementById("status");
+const submitButton = form.querySelector('button[type="submit"]');
 
-form.addEventListener("submit", (e) => {
+const REQUEST_TIMEOUT_MS = 45000;
+let isGenerating = false;
+
+function setGeneratingState(generating) {
+  isGenerating = generating;
+  loading.style.display = generating ? "block" : "none";
+
+  if (submitButton) {
+    submitButton.disabled = generating;
+  }
+
+  promptInput.disabled = generating;
+}
+
+function setStatus(message, isError = false) {
+  status.textContent = message;
+  status.style.display = message ? "block" : "none";
+  status.style.color = isError ? "#ff8a80" : "#9e9e9e";
+}
+
+function buildImageUrl(finalPrompt, seed, fallback = false) {
+  const baseUrl =
+    "https://image.pollinations.ai/prompt/" + encodeURIComponent(finalPrompt);
+
+  const params = new URLSearchParams({
+    width: "768",
+    height: "1024",
+    seed: String(seed),
+    nologo: "true"
+  });
+
+  if (!fallback) {
+    params.set("model", "flux");
+  }
+
+  return `${baseUrl}?${params.toString()}`;
+}
+
+function loadImageWithTimeout(imageElement, imageUrl, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+
+    function fail(message) {
+      if (settled) return;
+      settled = true;
+      reject(new Error(message));
+    }
+
+    function succeed() {
+      if (settled) return;
+      settled = true;
+      resolve();
+    }
+
+    const timeoutId = setTimeout(() => {
+      cleanup();
+      imageElement.removeAttribute("src");
+      fail("timeout");
+    }, timeoutMs);
+
+    function cleanup() {
+      clearTimeout(timeoutId);
+      imageElement.onload = null;
+      imageElement.onerror = null;
+    }
+
+    imageElement.onload = () => {
+      cleanup();
+      succeed();
+    };
+
+    imageElement.onerror = () => {
+      cleanup();
+      fail("load_error");
+    };
+
+    imageElement.src = imageUrl;
+  });
+}
+
+form.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  const userPrompt = document.getElementById("prompt").value.trim();
+  if (isGenerating) {
+    return;
+  }
+
+  const userPrompt = promptInput.value.trim();
   if (!userPrompt) return;
 
-  loading.style.display = "block";
+  setGeneratingState(true);
+  setStatus("Generating image...");
   image.style.display = "none";
 
-  // 🔒 Prompt locking for fashion accuracy
   const finalPrompt = [
     userPrompt,
     "fashion photography",
@@ -26,16 +113,36 @@ form.addEventListener("submit", (e) => {
   ].join(", ");
 
   const seed = Math.floor(Math.random() * 100000);
+  const primaryUrl = buildImageUrl(finalPrompt, seed, false);
+  const fallbackUrl = buildImageUrl(finalPrompt, seed, true);
 
-  const imgUrl =
-    "https://image.pollinations.ai/prompt/" +
-    encodeURIComponent(finalPrompt) +
-    `?width=768&height=1024&seed=${seed}&model=flux&nologo=true`;
+  try {
+    try {
+      await loadImageWithTimeout(image, primaryUrl, REQUEST_TIMEOUT_MS);
+    } catch (error) {
+      const isRetriable =
+        error.message === "load_error" || error.message === "timeout";
+      if (!isRetriable) {
+        throw error;
+      }
 
-  image.onload = () => {
-    loading.style.display = "none";
+      setStatus("Primary model failed, retrying...");
+      await loadImageWithTimeout(image, fallbackUrl, REQUEST_TIMEOUT_MS);
+    }
+
     image.style.display = "block";
-  };
-
-  image.src = imgUrl;
+    setStatus("");
+  } catch (error) {
+    const isTimeoutError = error.message === "timeout";
+    setStatus(
+      isTimeoutError
+        ? "Image generation timed out. Please try again."
+        : "Image generation failed. Please try again.",
+      true
+    );
+    image.style.display = "none";
+    image.removeAttribute("src");
+  } finally {
+    setGeneratingState(false);
+  }
 });
